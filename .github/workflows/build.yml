@@ -1,0 +1,179 @@
+name: Build & Release Desktop Apps
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    name: Build macOS App
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Enable macOS build
+        run: flutter config --enable-macos-desktop
+
+      - name: Build macOS App
+        run: flutter build macos --release
+
+      - name: Compress macOS Build
+        run: |
+          cd build/macos/Build/Products/Release
+          zip -r ../../../../docudiget-macos.zip docudiget.app
+
+      - name: Upload macOS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docudiget-macos
+          path: docudiget-macos.zip
+
+  build-windows:
+    name: Build Windows App & Installer
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Enable Windows build
+        run: flutter config --enable-windows-desktop
+
+      - name: Build Windows App
+        run: flutter build windows --release
+
+      - name: Compress Windows Build
+        run: |
+          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath docudiget-windows.zip
+
+      - name: Compile Windows Installer
+        run: |
+          iscc windows/setup.iss
+
+      - name: Upload Windows Zip Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docudiget-windows-zip
+          path: docudiget-windows.zip
+
+      - name: Upload Windows Installer Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docudiget-windows-installer
+          path: build/windows/DocuDigestOCR-Installer.exe
+
+  build-linux:
+    name: Build Linux App
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Enable Linux build
+        run: flutter config --enable-linux-desktop
+
+      - name: Build Linux App
+        run: flutter build linux --release
+
+      - name: Compress Linux Build
+        run: |
+          tar -czf docudiget-linux.tar.gz -C build/linux/x64/release/bundle .
+
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docudiget-linux
+          path: docudiget-linux.tar.gz
+
+  release:
+    name: Create GitHub Release
+    needs: [build-macos, build-windows, build-linux]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download macOS build
+        uses: actions/download-artifact@v4
+        with:
+          name: docudiget-macos
+          path: artifacts
+
+      - name: Download Windows zip build
+        uses: actions/download-artifact@v4
+        with:
+          name: docudiget-windows-zip
+          path: artifacts
+
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: docudiget-windows-installer
+          path: artifacts
+
+      - name: Download Linux build
+        uses: actions/download-artifact@v4
+        with:
+          name: docudiget-linux
+          path: artifacts
+
+      - name: Rename files with release tag
+        run: |
+          cd artifacts
+          mv docudiget-macos.zip docudiget-macos-${{ github.ref_name }}.zip
+          mv docudiget-windows.zip docudiget-windows-${{ github.ref_name }}.zip
+          mv DocuDigestOCR-Installer.exe docudiget-windows-installer-${{ github.ref_name }}.exe
+          mv docudiget-linux.tar.gz docudiget-linux-${{ github.ref_name }}.tar.gz
+          ls -la
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/docudiget-macos-${{ github.ref_name }}.zip
+            artifacts/docudiget-windows-${{ github.ref_name }}.zip
+            artifacts/docudiget-windows-installer-${{ github.ref_name }}.exe
+            artifacts/docudiget-linux-${{ github.ref_name }}.tar.gz
+          draft: false
+          prerelease: false
+          generate_release_notes: true
