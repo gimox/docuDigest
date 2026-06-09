@@ -38,7 +38,7 @@ jobs:
       - name: Compress macOS Build
         run: |
           cd build/macos/Build/Products/Release
-          zip -r ../../../../docudiget_macos_${{ env.VERSION }}.zip docudiget.app
+          zip -r ../../../../../docudiget_macos_${{ env.VERSION }}.zip docudiget.app
 
       - name: Upload macOS Artifact
         uses: actions/upload-artifact@v4
