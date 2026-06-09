@@ -167,7 +167,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> with SingleTi
     final hostController = TextEditingController(text: settings.apiHost);
     final portController = TextEditingController(text: settings.apiPort.toString());
     final modelController = TextEditingController(text: settings.modelName);
-    final promptController = TextEditingController(text: settings.prompt);
     String selectedMode = settings.apiMode;
 
     showDialog(
@@ -260,16 +259,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> with SingleTi
                           border: OutlineInputBorder(),
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: promptController,
-                        maxLines: 4,
-                        decoration: const InputDecoration(
-                          labelText: 'GLM-OCR Prompt',
-                          alignLabelWithHint: true,
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -286,7 +275,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> with SingleTi
                       apiHost: hostController.text,
                       apiPort: port,
                       modelName: modelController.text,
-                      prompt: promptController.text,
                       apiMode: selectedMode,
                     );
                     Navigator.of(context).pop();
@@ -344,6 +332,11 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> with SingleTi
             icon: Icon(Icons.download, color: hasDoc ? Colors.white70 : Colors.white24),
             tooltip: 'Esporta MD',
             onPressed: hasDoc ? _exportMarkdown : null,
+          ),
+          IconButton(
+            icon: const Icon(Icons.psychology, color: Colors.white70),
+            tooltip: 'Gestione Prompt',
+            onPressed: _showPromptDialog,
           ),
           IconButton(
             icon: const Icon(Icons.settings, color: Colors.white70),
@@ -502,67 +495,98 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> with SingleTi
                                               });
                                             }
 
+                                            final isDone = workspace.convertedMarkdown[pageNum]?.isNotEmpty == true;
+
                                             return GestureDetector(
                                               onTap: () => ref.read(workspaceNotifierProvider.notifier).setCurrentPage(pageNum),
                                               child: Padding(
                                                 padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
                                                 child: Column(
                                                   children: [
-                                                    Container(
-                                                      height: 155,
-                                                      width: 125,
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.white,
-                                                      borderRadius: BorderRadius.circular(8),
-                                                      border: Border.all(
-                                                        color: isSelected ? Colors.blueAccent : const Color(0xFF334155),
-                                                        width: isSelected ? 3.0 : 1.0,
-                                                      ),
-                                                      boxShadow: isSelected
-                                                          ? [
-                                                              BoxShadow(
-                                                                color: Colors.blueAccent.withValues(alpha: 0.4),
-                                                                blurRadius: 8,
-                                                                spreadRadius: 2,
-                                                              )
-                                                            ]
-                                                          : null,
-                                                    ),
-                                                    child: ClipRRect(
-                                                      borderRadius: BorderRadius.circular(5),
-                                                      child: imageBytes != null
-                                                          ? Image.memory(
-                                                              imageBytes,
-                                                              fit: BoxFit.cover,
-                                                            )
-                                                          : const Center(
-                                                              child: SizedBox(
-                                                                width: 20,
-                                                                height: 20,
-                                                                child: CircularProgressIndicator(
-                                                                  strokeWidth: 2,
-                                                                  color: Colors.blueAccent,
-                                                                ),
+                                                    Stack(
+                                                      clipBehavior: Clip.none,
+                                                      children: [
+                                                        Container(
+                                                          height: 155,
+                                                          width: 125,
+                                                          decoration: BoxDecoration(
+                                                            color: Colors.white,
+                                                            borderRadius: BorderRadius.circular(8),
+                                                            border: Border.all(
+                                                              color: isSelected ? Colors.blueAccent : const Color(0xFF334155),
+                                                              width: isSelected ? 3.0 : 1.0,
+                                                            ),
+                                                            boxShadow: isSelected
+                                                                ? [
+                                                                    BoxShadow(
+                                                                      color: Colors.blueAccent.withValues(alpha: 0.4),
+                                                                      blurRadius: 8,
+                                                                      spreadRadius: 2,
+                                                                    )
+                                                                  ]
+                                                                : null,
+                                                          ),
+                                                          child: ClipRRect(
+                                                            borderRadius: BorderRadius.circular(5),
+                                                            child: imageBytes != null
+                                                                ? Image.memory(
+                                                                    imageBytes,
+                                                                    fit: BoxFit.cover,
+                                                                  )
+                                                                : const Center(
+                                                                    child: SizedBox(
+                                                                      width: 20,
+                                                                      height: 20,
+                                                                      child: CircularProgressIndicator(
+                                                                        strokeWidth: 2,
+                                                                        color: Colors.blueAccent,
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                          ),
+                                                        ),
+                                                        if (isDone)
+                                                          Positioned(
+                                                            top: -4,
+                                                            right: -4,
+                                                            child: Container(
+                                                              decoration: const BoxDecoration(
+                                                                color: Colors.green,
+                                                                shape: BoxShape.circle,
+                                                                boxShadow: [
+                                                                  BoxShadow(
+                                                                    color: Colors.black26,
+                                                                    blurRadius: 4,
+                                                                    offset: Offset(0, 2),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                              padding: const EdgeInsets.all(3),
+                                                              child: const Icon(
+                                                                Icons.check,
+                                                                color: Colors.white,
+                                                                size: 12,
                                                               ),
                                                             ),
+                                                          ),
+                                                      ],
                                                     ),
-                                                  ),
-                                                  const SizedBox(height: 6),
-                                                  Text(
-                                                    'Pagina $pageNum',
-                                                    style: TextStyle(
-                                                      color: isSelected ? Colors.blueAccent : Colors.white70,
-                                                      fontSize: 12,
-                                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                                    const SizedBox(height: 6),
+                                                    Text(
+                                                      'Pagina $pageNum',
+                                                      style: TextStyle(
+                                                        color: isSelected ? Colors.blueAccent : Colors.white70,
+                                                        fontSize: 12,
+                                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                                      ),
                                                     ),
-                                                  ),
-                                                ],
+                                                  ],
+                                                ),
                                               ),
-                                            ),
-                                          );
-                                        },
+                                            );
+                                          },
+                                        ),
                                       ),
-                                    ),
                                     // Main PDF Page Display with Floating Page Controls Overlay
                                     Expanded(
                                       child: Padding(
@@ -932,6 +956,137 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> with SingleTi
           ),
         ),
       ),
+    );
+  }
+
+  void _showPromptDialog() {
+    final settings = ref.read(ocrSettingsNotifierProvider);
+    final promptController = TextEditingController(text: settings.customPrompt);
+    String selectedType = settings.selectedPromptType;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Row(
+                children: [
+                  const Icon(Icons.psychology, color: Colors.blueAccent),
+                  const SizedBox(width: 8),
+                  const Text('Gestione Prompt OCR'),
+                ],
+              ),
+              content: SizedBox(
+                width: 500,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text('Tipo Prompt:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white70)),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F172A),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF334155)),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: selectedType,
+                                dropdownColor: const Color(0xFF0F172A),
+                                isExpanded: true,
+                                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: 'default',
+                                    child: Text('Predefinito'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'custom',
+                                    child: Text('Personalizzato'),
+                                  ),
+                                ],
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setDialogState(() {
+                                      selectedType = value;
+                                    });
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    if (selectedType == 'custom') ...[
+                      const Text('Prompt Personalizzato:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white70)),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: promptController,
+                        maxLines: 5,
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        decoration: const InputDecoration(
+                          hintText: 'Inserisci il tuo prompt personalizzato...',
+                          hintStyle: TextStyle(color: Colors.white38),
+                          fillColor: Color(0xFF0F172A),
+                          filled: true,
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ] else ...[
+                      const Text('Prompt Predefinito (Solo Lettura):', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white70)),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF334155)),
+                        ),
+                        child: const Text(
+                          OcrSettings.defaultPrompt,
+                          style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    promptController.dispose();
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Annulla'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    ref.read(ocrSettingsNotifierProvider.notifier).updateSettings(
+                      selectedPromptType: selectedType,
+                      customPrompt: promptController.text,
+                    );
+                    promptController.dispose();
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Prompt salvato con successo')),
+                    );
+                  },
+                  child: const Text('Salva'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

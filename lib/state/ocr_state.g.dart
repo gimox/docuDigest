@@ -7,7 +7,7 @@ part of 'ocr_state.dart';
 // **************************************************************************
 
 String _$ocrSettingsNotifierHash() =>
-    r'e259c228aea779b062c563fd3d03b4114be20e40';
+    r'072e8b25cc08f4f7b87318ba55681119347bce27';
 
 /// See also [OcrSettingsNotifier].
 @ProviderFor(OcrSettingsNotifier)

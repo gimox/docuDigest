@@ -9,30 +9,38 @@ class OcrSettings {
   final String apiHost;
   final int apiPort;
   final String modelName;
-  final String prompt;
   final String apiMode; // 'mlx' or 'ollama'
+  final String customPrompt;
+  final String selectedPromptType; // 'default' or 'custom'
+
+  static const String defaultPrompt = 'Convert this document page image into clean, semantically structured Markdown suitable for a corporate knowledge base (Wiki).\n\nFollow these guidelines:\n1. Content Fidelity: Extract all textual content exactly. Do not summarize or omit information.\n2. Structure: Preserve hierarchy using proper Markdown heading levels, lists, and code blocks.\n3. Tables: Convert tabular data EXCLUSIVELY to Markdown table syntax (using | and -). NEVER use HTML table tags like <table>, <tr>, <td>.\n4. Visual Elements: For figures, charts, or images, insert a concise description inline in italics (e.g., *[Figura: descrizione]*).\n5. Math: Render equations using LaTeX (\$...\$ or \$\$... \$\$).\n6. Formatting: Do not add commentary; return only Markdown.';
+
+  String get prompt => selectedPromptType == 'default' ? defaultPrompt : customPrompt;
 
   OcrSettings({
     required this.apiHost,
     required this.apiPort,
     required this.modelName,
-    required this.prompt,
     required this.apiMode,
+    required this.customPrompt,
+    required this.selectedPromptType,
   });
 
   OcrSettings copyWith({
     String? apiHost,
     int? apiPort,
     String? modelName,
-    String? prompt,
     String? apiMode,
+    String? customPrompt,
+    String? selectedPromptType,
   }) {
     return OcrSettings(
       apiHost: apiHost ?? this.apiHost,
       apiPort: apiPort ?? this.apiPort,
       modelName: modelName ?? this.modelName,
-      prompt: prompt ?? this.prompt,
       apiMode: apiMode ?? this.apiMode,
+      customPrompt: customPrompt ?? this.customPrompt,
+      selectedPromptType: selectedPromptType ?? this.selectedPromptType,
     );
   }
 }
@@ -45,8 +53,9 @@ class OcrSettingsNotifier extends _$OcrSettingsNotifier {
       apiHost: 'localhost',
       apiPort: 8080,
       modelName: 'mlx-community/GLM-OCR-bf16',
-      prompt: 'Convert this document page image to clean Markdown, including tables, figures, charts, and mathematical formulas as LaTeX.',
       apiMode: 'mlx',
+      customPrompt: 'Convert this document page image to clean Markdown. Tables must be converted strictly to Markdown table syntax (using | and -). Do not use HTML table tags.',
+      selectedPromptType: 'default',
     );
   }
 
@@ -54,15 +63,17 @@ class OcrSettingsNotifier extends _$OcrSettingsNotifier {
     String? apiHost,
     int? apiPort,
     String? modelName,
-    String? prompt,
     String? apiMode,
+    String? customPrompt,
+    String? selectedPromptType,
   }) {
     state = state.copyWith(
       apiHost: apiHost,
       apiPort: apiPort,
       modelName: modelName,
-      prompt: prompt,
       apiMode: apiMode,
+      customPrompt: customPrompt,
+      selectedPromptType: selectedPromptType,
     );
   }
 }
@@ -219,10 +230,12 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       final settings = ref.read(ocrSettingsNotifierProvider);
       final ocr = ref.read(ocrServiceProvider);
 
-      final markdown = await ocr.transcribeImage(
+      final rawMarkdown = await ocr.transcribeImage(
         imageBytes: imageBytes,
         prompt: settings.prompt,
       );
+
+      final markdown = convertHtmlTablesToMarkdown(rawMarkdown);
 
       final newMarkdown = Map<int, String>.from(state.convertedMarkdown);
       newMarkdown[pageNumber] = markdown;
@@ -252,3 +265,82 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     }
   }
 }
+
+String convertHtmlTablesToMarkdown(String input) {
+  final tableRegex = RegExp(r'<table[^>]*>([\s\S]*?)<\/table>', caseSensitive: false);
+  
+  return input.replaceAllMapped(tableRegex, (tableMatch) {
+    final tableContent = tableMatch.group(1) ?? '';
+    final rowRegex = RegExp(r'<tr[^>]*>([\s\S]*?)<\/tr>', caseSensitive: false);
+    final rowMatches = rowRegex.allMatches(tableContent).toList();
+    
+    if (rowMatches.isEmpty) return '';
+    
+    final cellRegex = RegExp(r'<t[hd][^>]*>([\s\S]*?)<\/t[hd]>', caseSensitive: false);
+    final List<List<String>> rows = [];
+    int maxCols = 0;
+    
+    for (final rowMatch in rowMatches) {
+      final rowContent = rowMatch.group(1) ?? '';
+      final cellMatches = cellRegex.allMatches(rowContent);
+      final List<String> cells = [];
+      for (final cellMatch in cellMatches) {
+        var cellText = cellMatch.group(1) ?? '';
+        
+        // Strip inner HTML tags, collapse whitespace
+        cellText = cellText
+            .replaceAll(RegExp(r'<[^>]*>'), '')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .replaceAll('&amp;', '&')
+            .replaceAll('&lt;', '<')
+            .replaceAll('&gt;', '>')
+            .replaceAll('&quot;', '"')
+            .replaceAll('&#39;', "'")
+            .replaceAll('&nbsp;', ' ')
+            .replaceAll('|', '\\|')
+            .trim();
+        cells.add(cellText);
+      }
+      if (cells.isNotEmpty) {
+        rows.add(cells);
+        if (cells.length > maxCols) {
+          maxCols = cells.length;
+        }
+      }
+    }
+    
+    if (rows.isEmpty) return '';
+    
+    final buffer = StringBuffer();
+    
+    // First row is the header
+    final headerRow = rows[0];
+    while (headerRow.length < maxCols) {
+      headerRow.add('');
+    }
+    
+    buffer.write('\n\n| ');
+    buffer.write(headerRow.join(' | '));
+    buffer.write(' |\n');
+    
+    // Separator row
+    buffer.write('| ');
+    buffer.write(List.generate(maxCols, (_) => '---').join(' | '));
+    buffer.write(' |\n');
+    
+    // Data rows
+    for (int i = 1; i < rows.length; i++) {
+      final dataRow = rows[i];
+      while (dataRow.length < maxCols) {
+        dataRow.add('');
+      }
+      buffer.write('| ');
+      buffer.write(dataRow.join(' | '));
+      buffer.write(' |\n');
+    }
+    buffer.write('\n');
+    
+    return buffer.toString();
+  });
+}
+
