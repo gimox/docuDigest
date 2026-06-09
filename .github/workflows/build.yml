@@ -29,16 +29,22 @@ jobs:
       - name: Build macOS App
         run: flutter build macos --release
 
+      - name: Get Version Number
+        id: get_version
+        run: |
+          VERSION=$(grep "^version:" pubspec.yaml | cut -d' ' -f2 | tr '+' 'b' | tr -d '.' | tr -d '\r')
+          echo "VERSION=v$VERSION" >> $GITHUB_ENV
+
       - name: Compress macOS Build
         run: |
           cd build/macos/Build/Products/Release
-          zip -r ../../../../docudiget-macos.zip docudiget.app
+          zip -r ../../../../docudiget_macos_${{ env.VERSION }}.zip docudiget.app
 
       - name: Upload macOS Artifact
         uses: actions/upload-artifact@v4
         with:
           name: docudiget-macos
-          path: docudiget-macos.zip
+          path: docudiget_macos_${{ env.VERSION }}.zip
 
   build-windows:
     name: Build Windows App & Installer
@@ -62,25 +68,38 @@ jobs:
       - name: Build Windows App
         run: flutter build windows --release
 
+      - name: Get Version Number
+        id: get_version
+        shell: powershell
+        run: |
+          $versionLine = Get-Content pubspec.yaml | Select-String "^version:"
+          $fullVersion = ($versionLine -replace 'version:\s*', '').Trim()
+          $version = $fullVersion -replace '\+', 'b' -replace '\.', ''
+          echo "VERSION=v$version" >> $env:GITHUB_ENV
+
       - name: Compress Windows Build
         run: |
-          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath docudiget-windows.zip
+          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath docudiget_windows_${{ env.VERSION }}.zip
 
       - name: Compile Windows Installer
         run: |
           iscc windows/setup.iss
 
+      - name: Rename Windows Installer
+        run: |
+          mv build/windows/DocuDigestOCR-Installer.exe build/windows/docudiget_windows_installer_${{ env.VERSION }}.exe
+
       - name: Upload Windows Zip Artifact
         uses: actions/upload-artifact@v4
         with:
           name: docudiget-windows-zip
-          path: docudiget-windows.zip
+          path: docudiget_windows_${{ env.VERSION }}.zip
 
       - name: Upload Windows Installer Artifact
         uses: actions/upload-artifact@v4
         with:
           name: docudiget-windows-installer
-          path: build/windows/DocuDigestOCR-Installer.exe
+          path: build/windows/docudiget_windows_installer_${{ env.VERSION }}.exe
 
   build-linux:
     name: Build Linux App
@@ -109,15 +128,21 @@ jobs:
       - name: Build Linux App
         run: flutter build linux --release
 
+      - name: Get Version Number
+        id: get_version
+        run: |
+          VERSION=$(grep "^version:" pubspec.yaml | cut -d' ' -f2 | tr '+' 'b' | tr -d '.' | tr -d '\r')
+          echo "VERSION=v$VERSION" >> $GITHUB_ENV
+
       - name: Compress Linux Build
         run: |
-          tar -czf docudiget-linux.tar.gz -C build/linux/x64/release/bundle .
+          tar -czf docudiget_linux_${{ env.VERSION }}.tar.gz -C build/linux/x64/release/bundle .
 
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
         with:
           name: docudiget-linux
-          path: docudiget-linux.tar.gz
+          path: docudiget_linux_${{ env.VERSION }}.tar.gz
 
   release:
     name: Create GitHub Release
@@ -154,23 +179,14 @@ jobs:
           name: docudiget-linux
           path: artifacts
 
-      - name: Rename files with release tag
-        run: |
-          cd artifacts
-          mv docudiget-macos.zip docudiget-macos-${{ github.ref_name }}.zip
-          mv docudiget-windows.zip docudiget-windows-${{ github.ref_name }}.zip
-          mv DocuDigestOCR-Installer.exe docudiget-windows-installer-${{ github.ref_name }}.exe
-          mv docudiget-linux.tar.gz docudiget-linux-${{ github.ref_name }}.tar.gz
-          ls -la
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/docudiget-macos-${{ github.ref_name }}.zip
-            artifacts/docudiget-windows-${{ github.ref_name }}.zip
-            artifacts/docudiget-windows-installer-${{ github.ref_name }}.exe
-            artifacts/docudiget-linux-${{ github.ref_name }}.tar.gz
+            artifacts/docudiget_macos_*.zip
+            artifacts/docudiget_windows_*.zip
+            artifacts/docudiget_windows_installer_*.exe
+            artifacts/docudiget_linux_*.tar.gz
           draft: false
           prerelease: false
           generate_release_notes: true

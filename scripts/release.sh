@@ -74,7 +74,7 @@ echo "Updated pubspec.yaml successfully."
 
 # Git commit, tag, and push
 git add pubspec.yaml
-git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
+git commit -m "chore: bump version to $NEW_VERSION"
 git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
 
 echo "Created git tag: v$NEW_VERSION"
