@@ -7,7 +7,7 @@ part of 'ocr_state.dart';
 // **************************************************************************
 
 String _$ocrSettingsNotifierHash() =>
-    r'072e8b25cc08f4f7b87318ba55681119347bce27';
+    r'6067271ce2c0710ca493958a7415e7e8c5329117';
 
 /// See also [OcrSettingsNotifier].
 @ProviderFor(OcrSettingsNotifier)
@@ -23,7 +23,7 @@ final ocrSettingsNotifierProvider =
     );
 
 typedef _$OcrSettingsNotifier = AutoDisposeNotifier<OcrSettings>;
-String _$workspaceNotifierHash() => r'b213d4fd5981a5cae3bf85eb2a81d505e0aa4659';
+String _$workspaceNotifierHash() => r'c56f0d13f65301cc55e0e074b73997289d68066b';
 
 /// See also [WorkspaceNotifier].
 @ProviderFor(WorkspaceNotifier)

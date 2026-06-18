@@ -7,9 +7,9 @@ void main() {
     // Build our app and trigger a frame.
     await tester.pumpWidget(const ProviderScope(child: MyApp()));
 
-    // Verify that our initial welcome screen elements exist.
-    expect(find.text('Converti i tuoi PDF in Markdown'), findsOneWidget);
-    expect(find.text('Seleziona PDF'), findsOneWidget);
+    // Verify that our initial project management screen elements exist.
+    expect(find.text('Gestione Progetti'), findsOneWidget);
+    expect(find.text('Nuovo Progetto'), findsOneWidget);
   });
 }
 

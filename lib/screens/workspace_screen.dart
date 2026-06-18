@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:markdown_editor_plus/markdown_editor_plus.dart';
 // ignore: implementation_imports
 import 'package:markdown_editor_plus/src/toolbar.dart' as md_src;
-import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/foundation.dart';
@@ -17,20 +16,17 @@ class WorkspaceScreen extends ConsumerStatefulWidget {
   ConsumerState<WorkspaceScreen> createState() => _WorkspaceScreenState();
 }
 
-class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   bool _isDragging = false;
   bool _showThumbnails = true;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this, initialIndex: 1);
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
     super.dispose();
   }
 
@@ -690,7 +686,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> with SingleTi
                     ),
                   ),
                 ),
-                // Right Panel: Editor & Preview Tabs
+                // Right Panel: Editor
                 Expanded(
                   flex: 5,
                   child: Container(
@@ -704,117 +700,43 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> with SingleTi
                             color: Color(0xFF1E293B),
                             border: Border(bottom: BorderSide(color: Color(0xFF1E293B), width: 1)),
                           ),
-                          child: Center(
-                            child: Container(
-                              width: 380, // Restrict width so it looks like a nice pill
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF0F172A),
-                                borderRadius: BorderRadius.circular(24),
-                                border: Border.all(color: const Color(0xFF334155)),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.edit_note, color: Colors.blueAccent, size: 22),
+                              SizedBox(width: 8),
+                              Text(
+                                'Editor Risultato Markdown',
+                                style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold),
                               ),
-                              child: TabBar(
-                                controller: _tabController,
-                                indicator: BoxDecoration(
-                                  color: Colors.blueAccent,
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                labelColor: Colors.white,
-                                unselectedLabelColor: Colors.white54,
-                                labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
-                                indicatorSize: TabBarIndicatorSize.tab,
-                                dividerColor: Colors.transparent,
-                                tabs: const [
-                                  Tab(text: 'Modifica (Editor)'),
-                                  Tab(text: 'Anteprima (Rendered)'),
-                                ],
-                              ),
-                            ),
+                            ],
                           ),
                         ),
                         Expanded(
-                          child: TabBarView(
-                            controller: _tabController,
-                            children: [
-                              // Tab 1: Editor using markdown_editor_plus / MarkdownEditorPanel
-                              Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: hasDoc
-                                    ? MarkdownEditorPanel(currentPageIndex: currentPage)
-                                    : Container(
-                                        padding: const EdgeInsets.all(16),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius: BorderRadius.circular(16),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black.withValues(alpha: 0.3),
-                                              blurRadius: 16,
-                                              spreadRadius: 1,
-                                              offset: const Offset(0, 4),
-                                            ),
-                                          ],
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: hasDoc
+                                ? MarkdownEditorPanel(currentPageIndex: currentPage)
+                                : Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(16),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.3),
+                                          blurRadius: 16,
+                                          spreadRadius: 1,
+                                          offset: const Offset(0, 4),
                                         ),
-                                        child: const Center(
-                                          child: Text(
-                                            'L\'editor sarà attivo dopo il caricamento del PDF.',
-                                            style: TextStyle(color: Color(0xFF64748B), fontSize: 15),
-                                          ),
-                                        ),
+                                      ],
+                                    ),
+                                    child: const Center(
+                                      child: Text(
+                                        'L\'editor sarà attivo dopo il caricamento del PDF.',
+                                        style: TextStyle(color: Color(0xFF64748B), fontSize: 15),
                                       ),
-                              ),
-                              // Tab 2: Rendered Markdown Preview
-                              Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Container(
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(16),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.3),
-                                        blurRadius: 16,
-                                        spreadRadius: 1,
-                                        offset: const Offset(0, 4),
-                                      ),
-                                    ],
+                                    ),
                                   ),
-                                  child: hasDoc
-                                      ? SingleChildScrollView(
-                                          child: MarkdownBody(
-                                            data: workspace.convertedMarkdown[currentPage] ?? '',
-                                            selectable: true,
-                                            styleSheet: MarkdownStyleSheet.fromTheme(
-                                              ThemeData.light().copyWith(
-                                                textTheme: const TextTheme(
-                                                  bodyMedium: TextStyle(color: Color(0xFF1E293B), fontSize: 16),
-                                                ),
-                                              ),
-                                            ).copyWith(
-                                              p: const TextStyle(color: Color(0xFF1E293B), fontSize: 16, height: 1.5),
-                                              h1: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 24),
-                                              h2: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 20),
-                                              h3: const TextStyle(color: Color(0xFF334155), fontWeight: FontWeight.bold, fontSize: 18),
-                                              code: const TextStyle(backgroundColor: Color(0xFFF1F5F9), color: Colors.deepOrangeAccent),
-                                              codeblockDecoration: BoxDecoration(
-                                                color: const Color(0xFFF1F5F9),
-                                                borderRadius: BorderRadius.circular(8),
-                                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                                              ),
-                                            ),
-                                          ),
-                                        )
-                                      : const Center(
-                                          child: Text(
-                                            'L\'anteprima apparirà qui dopo il caricamento del PDF.',
-                                            style: TextStyle(color: Color(0xFF64748B), fontSize: 15),
-                                          ),
-                                        ),
-                                ),
-                              ),
-                            ],
                           ),
                         ),
                       ],
