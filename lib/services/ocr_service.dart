@@ -107,6 +107,24 @@ class OcrService {
       }
     }
   }
+
+  Future<bool> testConnection() async {
+    try {
+      if (apiMode == 'ollama') {
+        final url = Uri.parse('http://$apiHost:$apiPort/');
+        final response = await http.get(url).timeout(const Duration(seconds: 2));
+        return response.statusCode == 200;
+      } else {
+        // MLX mode: try root '/', since it is OpenAI compatible it might return 200, 404, or 405.
+        // As long as we get a response and no socket error, the server is active.
+        final url = Uri.parse('http://$apiHost:$apiPort/');
+        await http.get(url).timeout(const Duration(seconds: 2));
+        return true;
+      }
+    } catch (_) {
+      return false;
+    }
+  }
 }
 
 @riverpod

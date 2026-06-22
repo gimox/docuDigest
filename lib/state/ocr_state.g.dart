@@ -6,6 +6,24 @@ part of 'ocr_state.dart';
 // RiverpodGenerator
 // **************************************************************************
 
+String _$ocrConnectionStatusHash() =>
+    r'63204e4c9ba34a997aa7a08e896f736b73beccfc';
+
+/// See also [ocrConnectionStatus].
+@ProviderFor(ocrConnectionStatus)
+final ocrConnectionStatusProvider = AutoDisposeStreamProvider<bool>.internal(
+  ocrConnectionStatus,
+  name: r'ocrConnectionStatusProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$ocrConnectionStatusHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef OcrConnectionStatusRef = AutoDisposeStreamProviderRef<bool>;
 String _$ocrSettingsNotifierHash() =>
     r'6067271ce2c0710ca493958a7415e7e8c5329117';
 

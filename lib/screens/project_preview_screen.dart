@@ -8,6 +8,7 @@ import 'package:markdown_editor_plus/markdown_editor_plus.dart';
 import 'package:markdown_editor_plus/src/toolbar.dart' as md_src;
 import '../state/project_state.dart';
 import '../services/project_directory_helper.dart' as dir_helper;
+import 'widgets/server_connection_indicator.dart';
 
 class ProjectPreviewScreen extends ConsumerStatefulWidget {
   final String projectId;
@@ -159,9 +160,19 @@ class _ProjectPreviewScreenState extends ConsumerState<ProjectPreviewScreen> {
               context.pop();
             },
           ),
-          title: Text(
-            'Anteprima e Modifica: $_fileName',
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  'Anteprima e Modifica: $_fileName',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const ServerConnectionIndicator(),
+            ],
           ),
           actions: [
             if (_hasUnsavedChanges)

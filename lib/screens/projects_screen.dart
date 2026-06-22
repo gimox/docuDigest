@@ -8,6 +8,7 @@ import 'package:pdfx/pdfx.dart';
 import '../state/project_state.dart';
 import '../state/ocr_state.dart';
 import '../services/project_directory_helper.dart' as dir_helper;
+import 'widgets/server_connection_indicator.dart';
 
 
 class ProjectsScreen extends ConsumerStatefulWidget {
@@ -98,9 +99,18 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
             ],
           ),
           const SizedBox(height: 4),
-          const Text(
-            'Gestione Progetti OCR',
-            style: TextStyle(color: Colors.white54, fontSize: 12),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Gestione Progetti OCR',
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              const ServerConnectionIndicator(),
+            ],
           ),
         ],
       ),
@@ -298,6 +308,37 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
     final progress = totalCount == 0 ? 0.0 : completedCount / totalCount;
     final isAnyFileConverting = project.files.any((f) => f.status == 'converting');
 
+    String buttonText = 'Converti Tutti i File';
+    IconData buttonIcon = Icons.play_circle_filled;
+    VoidCallback? buttonAction;
+    Color buttonColor = Colors.tealAccent.shade700;
+
+    if (project.isConvertingAll) {
+      buttonText = 'Interrompi Conversione';
+      buttonIcon = Icons.stop_circle;
+      buttonAction = () => ref.read(projectNotifierProvider.notifier).cancelProjectConversion(project.id);
+      buttonColor = Colors.redAccent.shade700;
+    } else if (project.files.isEmpty || (isAnyFileConverting && !project.isConvertingAll)) {
+      buttonAction = null;
+    } else {
+      if (completedCount == totalCount && totalCount > 0) {
+        buttonText = 'Riconverti tutti i file';
+        buttonIcon = Icons.replay_circle_filled;
+        buttonAction = () => _showReconvertAllDialog(context, ref, project.id);
+        buttonColor = Colors.orangeAccent.shade700;
+      } else if (completedCount > 0 && completedCount < totalCount) {
+        buttonText = 'Termina conversione';
+        buttonIcon = Icons.play_circle_filled;
+        buttonAction = () => ref.read(projectNotifierProvider.notifier).convertAllFiles(project.id, forceReconvert: false);
+        buttonColor = Colors.blueAccent.shade700;
+      } else {
+        buttonText = 'Converti Tutti i File';
+        buttonIcon = Icons.play_circle_filled;
+        buttonAction = () => ref.read(projectNotifierProvider.notifier).convertAllFiles(project.id, forceReconvert: false);
+        buttonColor = Colors.tealAccent.shade700;
+      }
+    }
+
     return Column(
       children: [
         // Project Dashboard Header
@@ -359,17 +400,11 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                   ),
                   const SizedBox(width: 16),
                   FilledButton.icon(
-                    onPressed: project.files.isEmpty || (isAnyFileConverting && !project.isConvertingAll)
-                        ? null
-                        : (project.isConvertingAll
-                            ? () => ref.read(projectNotifierProvider.notifier).cancelProjectConversion(project.id)
-                            : () => ref.read(projectNotifierProvider.notifier).convertAllFiles(project.id)),
-                    icon: project.isConvertingAll
-                        ? const Icon(Icons.stop_circle, size: 18)
-                        : const Icon(Icons.play_circle_filled, size: 18),
-                    label: Text(project.isConvertingAll ? 'Interrompi Conversione' : 'Converti Tutti i File'),
+                    onPressed: buttonAction,
+                    icon: Icon(buttonIcon, size: 18),
+                    label: Text(buttonText),
                     style: FilledButton.styleFrom(
-                      backgroundColor: project.isConvertingAll ? Colors.redAccent.shade700 : Colors.tealAccent.shade700,
+                      backgroundColor: buttonColor,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -434,8 +469,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
       itemBuilder: (context, index) {
         final file = project.files[index];
         final hasPreview = file.status == 'completed' ||
-            (file.status == 'cancelled' &&
-                file.resultMarkdown != null &&
+            (file.resultMarkdown != null &&
                 file.resultMarkdown!.isNotEmpty);
         return Card(
           color: const Color(0xFF1E293B),
@@ -578,10 +612,16 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                                       ? null
                                       : () => ref.read(projectNotifierProvider.notifier).convertSingleFile(project.id, file.path),
                                 ),
+                              if (file.status == 'completed' || file.status == 'error' || file.status == 'cancelled')
+                                IconButton(
+                                  icon: const Icon(Icons.restart_alt, color: Colors.orangeAccent),
+                                  tooltip: 'Rimarca per riconversione',
+                                  onPressed: () => ref.read(projectNotifierProvider.notifier).markFileForReconversion(project.id, file.path),
+                                ),
                               IconButton(
                                 icon: Icon(
                                   Icons.visibility,
-                                  color: hasPreview ? Colors.white70 : Colors.white24,
+                                  color: hasPreview ? Colors.greenAccent : Colors.white24,
                                 ),
                                 tooltip: 'Anteprima Risultato',
                                 onPressed: hasPreview
@@ -709,10 +749,16 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                                   ? null
                                   : () => ref.read(projectNotifierProvider.notifier).convertSingleFile(project.id, file.path),
                             ),
+                          if (file.status == 'completed' || file.status == 'error' || file.status == 'cancelled')
+                            IconButton(
+                              icon: const Icon(Icons.restart_alt, color: Colors.orangeAccent),
+                              tooltip: 'Rimarca per riconversione',
+                              onPressed: () => ref.read(projectNotifierProvider.notifier).markFileForReconversion(project.id, file.path),
+                            ),
                           IconButton(
                             icon: Icon(
                               Icons.visibility,
-                              color: hasPreview ? Colors.white70 : Colors.white24,
+                              color: hasPreview ? Colors.greenAccent : Colors.white24,
                             ),
                             tooltip: 'Anteprima Risultato',
                             onPressed: hasPreview
@@ -817,6 +863,36 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
       barrierDismissible: false,
       builder: (context) {
         return const CreateProjectDialog();
+      },
+    );
+  }
+
+  void _showReconvertAllDialog(BuildContext context, WidgetRef ref, String projectId) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
+          title: const Text('Riconversione Totale', style: TextStyle(color: Colors.white)),
+          content: const Text(
+            'Tutti i file in questo progetto sono già stati convertiti. '
+            'Vuoi riconvertirli tutti da capo? Questo sovrascriverà i file markdown esistenti nella cartella di destinazione.',
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Annulla', style: TextStyle(color: Colors.white54)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                ref.read(projectNotifierProvider.notifier).convertAllFiles(projectId, forceReconvert: true);
+              },
+              child: const Text('Riconverti', style: TextStyle(color: Colors.redAccent)),
+            ),
+          ],
+        );
       },
     );
   }
@@ -1375,7 +1451,7 @@ class _CreateProjectDialogState extends State<CreateProjectDialog> {
         files = await dir_helper.listPdfFilesInDirectory(_sourceDir);
       }
 
-      ref.read(projectNotifierProvider.notifier).createProject(
+      await ref.read(projectNotifierProvider.notifier).createProject(
             name,
             _sourceDir,
             _destDir,

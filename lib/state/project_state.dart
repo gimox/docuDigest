@@ -206,8 +206,10 @@ class ProjectNotifier extends _$ProjectNotifier {
       final projectsJson = prefs.getString('projects');
       if (projectsJson != null) {
         final List<dynamic> decoded = jsonDecode(projectsJson);
-        final projects = decoded.map((p) => Project.fromJson(p as Map<String, dynamic>)).toList();
+        var projects = decoded.map((p) => Project.fromJson(p as Map<String, dynamic>)).toList();
         
+        projects = await _checkExistingMarkdownFiles(projects);
+
         String? selectedId = prefs.getString('selected_project_id');
         if (selectedId == null && projects.isNotEmpty) {
           selectedId = projects.first.id;
@@ -221,6 +223,33 @@ class ProjectNotifier extends _$ProjectNotifier {
     } catch (e) {
       state = state.copyWith(globalError: 'Errore caricamento progetti: $e');
     }
+  }
+
+  Future<List<Project>> _checkExistingMarkdownFiles(List<Project> projectsList) async {
+    final updatedProjects = <Project>[];
+    for (final project in projectsList) {
+      final updatedFiles = <ProjectFile>[];
+      for (final file in project.files) {
+        String destFileName = file.name;
+        if (destFileName.toLowerCase().endsWith('.pdf')) {
+          destFileName = destFileName.substring(0, destFileName.length - 4);
+        }
+        destFileName = '$destFileName.md';
+
+        final existingMarkdown = await dir_helper.readMarkdownFileIfExists(project.destDir, destFileName);
+        if (existingMarkdown != null) {
+          updatedFiles.add(file.copyWith(
+            status: 'completed',
+            progress: 1.0,
+            resultMarkdown: existingMarkdown,
+          ));
+        } else {
+          updatedFiles.add(file);
+        }
+      }
+      updatedProjects.add(project.copyWith(files: updatedFiles));
+    }
+    return updatedProjects;
   }
 
   Future<void> _saveProjects() async {
@@ -262,14 +291,35 @@ class ProjectNotifier extends _$ProjectNotifier {
     _saveProjects();
   }
 
-  void createProject(String name, String sourceDir, String destDir, List<ProjectFile> files) {
+  Future<void> createProject(String name, String sourceDir, String destDir, List<ProjectFile> files) async {
     final id = DateTime.now().millisecondsSinceEpoch.toString();
+    
+    final updatedFiles = <ProjectFile>[];
+    for (final file in files) {
+      String destFileName = file.name;
+      if (destFileName.toLowerCase().endsWith('.pdf')) {
+        destFileName = destFileName.substring(0, destFileName.length - 4);
+      }
+      destFileName = '$destFileName.md';
+
+      final existingMarkdown = await dir_helper.readMarkdownFileIfExists(destDir, destFileName);
+      if (existingMarkdown != null) {
+        updatedFiles.add(file.copyWith(
+          status: 'completed',
+          progress: 1.0,
+          resultMarkdown: existingMarkdown,
+        ));
+      } else {
+        updatedFiles.add(file);
+      }
+    }
+
     final newProject = Project(
       id: id,
       name: name,
       sourceDir: sourceDir,
       destDir: destDir,
-      files: files,
+      files: updatedFiles,
     );
     state = state.copyWith(
       projects: [...state.projects, newProject],
@@ -443,7 +493,7 @@ class ProjectNotifier extends _$ProjectNotifier {
     }
   }
 
-  Future<void> convertAllFiles(String projectId) async {
+  Future<void> convertAllFiles(String projectId, {bool forceReconvert = false}) async {
     final projectIndex = state.projects.indexWhere((p) => p.id == projectId);
     if (projectIndex == -1) return;
     
@@ -461,11 +511,29 @@ class ProjectNotifier extends _$ProjectNotifier {
         if (_cancelledProjectIds.contains(projectId)) {
           break;
         }
+
+        // Se non stiamo forzando la riconversione e il file è già completato, lo saltiamo
+        if (!forceReconvert && file.status == 'completed') {
+          continue;
+        }
+
         await convertSingleFile(projectId, file.path);
       }
     } finally {
       _updateProjectConvertingState(projectId, isConvertingAll: false);
     }
+  }
+
+  void markFileForReconversion(String projectId, String filePath) {
+    _updateFileState(
+      projectId,
+      filePath,
+      status: 'pending',
+      progress: 0.0,
+      currentPage: 0,
+      pagesCount: 0,
+      error: null,
+    );
   }
 
   void _updateFileState(

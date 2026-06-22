@@ -25,3 +25,7 @@ Future<void> saveMarkdownToDirectory(String destDirPath, String fileName, String
 Future<Uint8List> readFileBytes(String filePath) async {
   throw UnsupportedError('Web cannot read local files by path');
 }
+
+Future<String?> readMarkdownFileIfExists(String destDirPath, String fileName) async {
+  return null;
+}

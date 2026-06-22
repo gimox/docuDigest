@@ -45,3 +45,16 @@ Future<Uint8List> readFileBytes(String filePath) async {
   }
   return await file.readAsBytes();
 }
+
+Future<String?> readMarkdownFileIfExists(String destDirPath, String fileName) async {
+  try {
+    final separator = destDirPath.endsWith(Platform.pathSeparator) ? '' : Platform.pathSeparator;
+    final file = File('$destDirPath$separator$fileName');
+    if (await file.exists()) {
+      return await file.readAsString();
+    }
+  } catch (e) {
+    debugPrint('Errore nella lettura del file markdown esistente: $e');
+  }
+  return null;
+}

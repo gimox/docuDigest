@@ -16,3 +16,7 @@ Future<void> saveMarkdownToDirectory(String destDirPath, String fileName, String
 Future<Uint8List> readFileBytes(String filePath) {
   throw UnsupportedError('Cannot read file bytes without dart:io');
 }
+
+Future<String?> readMarkdownFileIfExists(String destDirPath, String fileName) async {
+  throw UnsupportedError('Cannot read file without dart:io or dart:html');
+}

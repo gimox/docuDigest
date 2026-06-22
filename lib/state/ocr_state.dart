@@ -78,6 +78,16 @@ class OcrSettingsNotifier extends _$OcrSettingsNotifier {
   }
 }
 
+@riverpod
+Stream<bool> ocrConnectionStatus(OcrConnectionStatusRef ref) async* {
+  final ocr = ref.watch(ocrServiceProvider);
+  yield await ocr.testConnection();
+  
+  yield* Stream.periodic(const Duration(seconds: 10), (_) {
+    return ocr.testConnection();
+  }).asyncMap((event) async => await event);
+}
+
 class WorkspaceState {
   final String? filePath;
   final String? fileName;

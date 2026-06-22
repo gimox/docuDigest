@@ -6,7 +6,7 @@ part of 'project_state.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$projectNotifierHash() => r'b481c2a33a91e9c0dbbb5ecaa2c008eadb61b840';
+String _$projectNotifierHash() => r'899a1a09a3906aa5490df28f35da3f7eebbd3031';
 
 /// See also [ProjectNotifier].
 @ProviderFor(ProjectNotifier)

@@ -8,6 +8,7 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/foundation.dart';
 import '../state/ocr_state.dart';
 import '../services/file_saver.dart';
+import 'widgets/server_connection_indicator.dart';
 
 class WorkspaceScreen extends ConsumerStatefulWidget {
   const WorkspaceScreen({super.key});
@@ -311,9 +312,16 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A), // Modern dark slate background
       appBar: AppBar(
-        title: const Text(
-          'DocuDigest OCR',
-          style: TextStyle(fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.5),
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'DocuDigest OCR',
+              style: TextStyle(fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.5),
+            ),
+            SizedBox(width: 12),
+            ServerConnectionIndicator(),
+          ],
         ),
         backgroundColor: const Color(0xFF0F172A),
         elevation: 0,
