@@ -3,8 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-
-const String currentAppVersion = '1.0.6';
+import 'package:package_info_plus/package_info_plus.dart';
 
 bool _isNewerVersion(String current, String latest) {
   final cleanCurrent = current.replaceAll(RegExp(r'[vV]'), '');
@@ -155,6 +154,14 @@ class _DownloadProgressDialogState extends State<_DownloadProgressDialog> {
 
 Future<void> checkForUpdate(BuildContext context, {bool showNoUpdateDialog = false}) async {
   if (kIsWeb) return;
+
+  String currentAppVersion = '1.0.6';
+  try {
+    final packageInfo = await PackageInfo.fromPlatform();
+    if (packageInfo.version.isNotEmpty) {
+      currentAppVersion = packageInfo.version;
+    }
+  } catch (_) {}
 
   try {
     final response = await http.get(
