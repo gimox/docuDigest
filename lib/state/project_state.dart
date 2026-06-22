@@ -28,6 +28,8 @@ class ProjectFile {
   final String customPrompt;
   final String? error;
   final String? resultMarkdown;
+  final DateTime? startTime;
+  final DateTime? endTime;
 
   ProjectFile({
     required this.path,
@@ -41,6 +43,8 @@ class ProjectFile {
     this.customPrompt = '',
     this.error,
     this.resultMarkdown,
+    this.startTime,
+    this.endTime,
   });
 
   Map<String, dynamic> toJson() {
@@ -55,6 +59,8 @@ class ProjectFile {
       'customPrompt': customPrompt,
       'error': error,
       'resultMarkdown': resultMarkdown,
+      'startTime': startTime?.toIso8601String(),
+      'endTime': endTime?.toIso8601String(),
     };
   }
 
@@ -70,6 +76,8 @@ class ProjectFile {
       customPrompt: json['customPrompt'] as String? ?? '',
       error: json['error'] as String?,
       resultMarkdown: json['resultMarkdown'] as String?,
+      startTime: json['startTime'] != null ? DateTime.tryParse(json['startTime'] as String) : null,
+      endTime: json['endTime'] != null ? DateTime.tryParse(json['endTime'] as String) : null,
     );
   }
 
@@ -85,6 +93,8 @@ class ProjectFile {
     String? customPrompt,
     String? error,
     String? resultMarkdown,
+    DateTime? Function()? startTime,
+    DateTime? Function()? endTime,
   }) {
     return ProjectFile(
       path: path ?? this.path,
@@ -98,6 +108,8 @@ class ProjectFile {
       customPrompt: customPrompt ?? this.customPrompt,
       error: error ?? this.error,
       resultMarkdown: resultMarkdown ?? this.resultMarkdown,
+      startTime: startTime != null ? startTime() : this.startTime,
+      endTime: endTime != null ? endTime() : this.endTime,
     );
   }
 }
@@ -109,6 +121,8 @@ class Project {
   final String destDir;
   final List<ProjectFile> files;
   final bool isConvertingAll;
+  final DateTime? globalStartTime;
+  final DateTime? globalEndTime;
 
   Project({
     required this.id,
@@ -117,6 +131,8 @@ class Project {
     required this.destDir,
     required this.files,
     this.isConvertingAll = false,
+    this.globalStartTime,
+    this.globalEndTime,
   });
 
   Map<String, dynamic> toJson() {
@@ -126,6 +142,8 @@ class Project {
       'sourceDir': sourceDir,
       'destDir': destDir,
       'files': files.map((f) => f.toJson()).toList(),
+      'globalStartTime': globalStartTime?.toIso8601String(),
+      'globalEndTime': globalEndTime?.toIso8601String(),
     };
   }
 
@@ -138,6 +156,8 @@ class Project {
       files: (json['files'] as List<dynamic>)
           .map((f) => ProjectFile.fromJson(f as Map<String, dynamic>))
           .toList(),
+      globalStartTime: json['globalStartTime'] != null ? DateTime.tryParse(json['globalStartTime'] as String) : null,
+      globalEndTime: json['globalEndTime'] != null ? DateTime.tryParse(json['globalEndTime'] as String) : null,
     );
   }
 
@@ -148,6 +168,8 @@ class Project {
     String? destDir,
     List<ProjectFile>? files,
     bool? isConvertingAll,
+    DateTime? Function()? globalStartTime,
+    DateTime? Function()? globalEndTime,
   }) {
     return Project(
       id: id ?? this.id,
@@ -156,6 +178,8 @@ class Project {
       destDir: destDir ?? this.destDir,
       files: files ?? this.files,
       isConvertingAll: isConvertingAll ?? this.isConvertingAll,
+      globalStartTime: globalStartTime != null ? globalStartTime() : this.globalStartTime,
+      globalEndTime: globalEndTime != null ? globalEndTime() : this.globalEndTime,
     );
   }
 }
@@ -208,6 +232,56 @@ class ProjectNotifier extends _$ProjectNotifier {
         final List<dynamic> decoded = jsonDecode(projectsJson);
         var projects = decoded.map((p) => Project.fromJson(p as Map<String, dynamic>)).toList();
         
+        if (!kIsWeb) {
+          final syncedProjects = <Project>[];
+          for (var project in projects) {
+            if (project.sourceDir.isNotEmpty) {
+              try {
+                final currentFilesOnDisk = await dir_helper.listPdfFilesInDirectory(project.sourceDir);
+                final diskFilePaths = currentFilesOnDisk.map((f) => f.path).toSet();
+                
+                final updatedFiles = <ProjectFile>[];
+                
+                // Mantieni i file esistenti che sono ancora presenti su disco
+                for (final existingFile in project.files) {
+                  if (diskFilePaths.contains(existingFile.path)) {
+                    updatedFiles.add(existingFile);
+                  }
+                }
+                
+                // Aggiungi i nuovi file che non erano nel progetto
+                final existingFilePaths = project.files.map((f) => f.path).toSet();
+                for (final diskFile in currentFilesOnDisk) {
+                  if (!existingFilePaths.contains(diskFile.path)) {
+                    String destFileName = diskFile.name;
+                    if (destFileName.toLowerCase().endsWith('.pdf')) {
+                      destFileName = destFileName.substring(0, destFileName.length - 4);
+                    }
+                    destFileName = '$destFileName.md';
+
+                    final existingMarkdown = await dir_helper.readMarkdownFileIfExists(project.destDir, destFileName);
+                    if (existingMarkdown != null) {
+                      updatedFiles.add(diskFile.copyWith(
+                        status: 'completed',
+                        progress: 1.0,
+                        resultMarkdown: existingMarkdown,
+                      ));
+                    } else {
+                      updatedFiles.add(diskFile);
+                    }
+                  }
+                }
+                
+                project = project.copyWith(files: updatedFiles);
+              } catch (e) {
+                debugPrint('Errore sync all\'avvio per ${project.name}: $e');
+              }
+            }
+            syncedProjects.add(project);
+          }
+          projects = syncedProjects;
+        }
+
         projects = await _checkExistingMarkdownFiles(projects);
 
         String? selectedId = prefs.getString('selected_project_id');
@@ -219,9 +293,68 @@ class ProjectNotifier extends _$ProjectNotifier {
           projects: projects,
           selectedProjectId: selectedId,
         );
+        
+        await _saveProjects();
       }
     } catch (e) {
       state = state.copyWith(globalError: 'Errore caricamento progetti: $e');
+    }
+  }
+
+  Future<void> syncProjectFiles(String projectId) async {
+    if (kIsWeb) return;
+
+    final projectIndex = state.projects.indexWhere((p) => p.id == projectId);
+    if (projectIndex == -1) return;
+    
+    final project = state.projects[projectIndex];
+    if (project.sourceDir.isEmpty) return;
+
+    try {
+      final currentFilesOnDisk = await dir_helper.listPdfFilesInDirectory(project.sourceDir);
+      final diskFilePaths = currentFilesOnDisk.map((f) => f.path).toSet();
+      
+      final updatedFiles = <ProjectFile>[];
+      
+      // Mantieni i file esistenti che sono ancora presenti su disco
+      for (final existingFile in project.files) {
+        if (diskFilePaths.contains(existingFile.path)) {
+          updatedFiles.add(existingFile);
+        }
+      }
+      
+      // Aggiungi i nuovi file che non erano nel progetto
+      final existingFilePaths = project.files.map((f) => f.path).toSet();
+      for (final diskFile in currentFilesOnDisk) {
+        if (!existingFilePaths.contains(diskFile.path)) {
+          String destFileName = diskFile.name;
+          if (destFileName.toLowerCase().endsWith('.pdf')) {
+            destFileName = destFileName.substring(0, destFileName.length - 4);
+          }
+          destFileName = '$destFileName.md';
+
+          final existingMarkdown = await dir_helper.readMarkdownFileIfExists(project.destDir, destFileName);
+          if (existingMarkdown != null) {
+            updatedFiles.add(diskFile.copyWith(
+              status: 'completed',
+              progress: 1.0,
+              resultMarkdown: existingMarkdown,
+            ));
+          } else {
+            updatedFiles.add(diskFile);
+          }
+        }
+      }
+
+      final updatedProjects = state.projects.map((p) {
+        if (p.id != projectId) return p;
+        return p.copyWith(files: updatedFiles);
+      }).toList();
+
+      state = state.copyWith(projects: updatedProjects);
+      await _saveProjects();
+    } catch (e) {
+      debugPrint('Errore durante la sincronizzazione della cartella: $e');
     }
   }
 
@@ -269,18 +402,34 @@ class ProjectNotifier extends _$ProjectNotifier {
 
   void cancelSingleFileConversion(String projectId, String filePath) {
     _cancelledFilePaths.add(filePath);
-    _updateFileState(projectId, filePath, status: 'cancelled', error: null);
+    _updateFileState(
+      projectId, 
+      filePath, 
+      status: 'cancelled', 
+      error: null,
+      endTime: () => DateTime.now(),
+    );
   }
 
   void cancelProjectConversion(String projectId) {
     _cancelledProjectIds.add(projectId);
-    _updateProjectConvertingState(projectId, isConvertingAll: false);
+    _updateProjectConvertingState(
+      projectId, 
+      isConvertingAll: false,
+      globalEndTime: () => DateTime.now(),
+    );
     final projectIndex = state.projects.indexWhere((p) => p.id == projectId);
     if (projectIndex != -1) {
       for (final file in state.projects[projectIndex].files) {
         if (file.status == 'converting') {
           _cancelledFilePaths.add(file.path);
-          _updateFileState(projectId, file.path, status: 'cancelled', error: null);
+          _updateFileState(
+            projectId, 
+            file.path, 
+            status: 'cancelled', 
+            error: null,
+            endTime: () => DateTime.now(),
+          );
         }
       }
     }
@@ -384,6 +533,8 @@ class ProjectNotifier extends _$ProjectNotifier {
       currentPage: 0,
       pagesCount: 0,
       error: null,
+      startTime: () => DateTime.now(),
+      endTime: () => null,
     );
     _cancelledFilePaths.remove(filePath);
 
@@ -406,7 +557,6 @@ class ProjectNotifier extends _$ProjectNotifier {
 
       final pageCount = doc.pagesCount;
 
-      // Update pages count initially
       _updateFileState(
         projectId,
         filePath,
@@ -471,6 +621,7 @@ class ProjectNotifier extends _$ProjectNotifier {
         currentPage: pageCount,
         pagesCount: pageCount,
         resultMarkdown: fullMarkdown,
+        endTime: () => DateTime.now(),
       );
     } catch (e) {
       if (e is UserCancellationException) {
@@ -481,6 +632,7 @@ class ProjectNotifier extends _$ProjectNotifier {
           status: 'cancelled',
           error: null,
           resultMarkdown: partialMarkdown.isNotEmpty ? partialMarkdown : null,
+          endTime: () => DateTime.now(),
         );
       } else {
         _updateFileState(
@@ -488,6 +640,7 @@ class ProjectNotifier extends _$ProjectNotifier {
           filePath, 
           status: 'error', 
           error: e.toString(),
+          endTime: () => DateTime.now(),
         );
       }
     }
@@ -500,7 +653,12 @@ class ProjectNotifier extends _$ProjectNotifier {
     final project = state.projects[projectIndex];
     if (project.isConvertingAll) return;
 
-    _updateProjectConvertingState(projectId, isConvertingAll: true);
+    _updateProjectConvertingState(
+      projectId, 
+      isConvertingAll: true,
+      globalStartTime: () => DateTime.now(),
+      globalEndTime: () => null,
+    );
     _cancelledProjectIds.remove(projectId);
     for (final file in project.files) {
       _cancelledFilePaths.remove(file.path);
@@ -512,7 +670,6 @@ class ProjectNotifier extends _$ProjectNotifier {
           break;
         }
 
-        // Se non stiamo forzando la riconversione e il file è già completato, lo saltiamo
         if (!forceReconvert && file.status == 'completed') {
           continue;
         }
@@ -520,7 +677,11 @@ class ProjectNotifier extends _$ProjectNotifier {
         await convertSingleFile(projectId, file.path);
       }
     } finally {
-      _updateProjectConvertingState(projectId, isConvertingAll: false);
+      _updateProjectConvertingState(
+        projectId, 
+        isConvertingAll: false,
+        globalEndTime: () => DateTime.now(),
+      );
     }
   }
 
@@ -533,6 +694,8 @@ class ProjectNotifier extends _$ProjectNotifier {
       currentPage: 0,
       pagesCount: 0,
       error: null,
+      startTime: () => null,
+      endTime: () => null,
     );
   }
 
@@ -545,6 +708,8 @@ class ProjectNotifier extends _$ProjectNotifier {
     int? pagesCount,
     String? error,
     String? resultMarkdown,
+    DateTime? Function()? startTime,
+    DateTime? Function()? endTime,
   }) {
     final projects = state.projects.map((p) {
       if (p.id != projectId) return p;
@@ -557,6 +722,8 @@ class ProjectNotifier extends _$ProjectNotifier {
           pagesCount: pagesCount ?? f.pagesCount,
           error: error ?? f.error,
           resultMarkdown: resultMarkdown ?? f.resultMarkdown,
+          startTime: startTime,
+          endTime: endTime,
         );
       }).toList();
       return p.copyWith(files: updatedFiles);
@@ -565,10 +732,19 @@ class ProjectNotifier extends _$ProjectNotifier {
     _saveProjects();
   }
 
-  void _updateProjectConvertingState(String projectId, {required bool isConvertingAll}) {
+  void _updateProjectConvertingState(
+    String projectId, {
+    required bool isConvertingAll,
+    DateTime? Function()? globalStartTime,
+    DateTime? Function()? globalEndTime,
+  }) {
     final projects = state.projects.map((p) {
       if (p.id != projectId) return p;
-      return p.copyWith(isConvertingAll: isConvertingAll);
+      return p.copyWith(
+        isConvertingAll: isConvertingAll,
+        globalStartTime: globalStartTime,
+        globalEndTime: globalEndTime,
+      );
     }).toList();
     state = state.copyWith(projects: projects);
     _saveProjects();

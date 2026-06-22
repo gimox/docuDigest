@@ -336,6 +336,18 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
     final progress = totalCount == 0 ? 0.0 : completedCount / totalCount;
     final isAnyFileConverting = project.files.any((f) => f.status == 'converting');
 
+    int totalProjectPages = 0;
+    int currentProjectPage = 0;
+    for (final f in project.files) {
+      final filePages = f.pagesCount > 0 ? f.pagesCount : 5;
+      totalProjectPages += filePages;
+      if (f.status == 'completed') {
+        currentProjectPage += filePages;
+      } else if (f.status == 'converting') {
+        currentProjectPage += f.currentPage;
+      }
+    }
+
     String buttonText = 'Converti Tutti i File';
     IconData buttonIcon = Icons.play_circle_filled;
     VoidCallback? buttonAction;
@@ -427,6 +439,31 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                     ),
                   ),
                   const SizedBox(width: 16),
+                  if (!kIsWeb) ...[
+                    IconButton(
+                      icon: const Icon(Icons.refresh, color: Colors.blueAccent),
+                      tooltip: 'Sincronizza file cartella',
+                      onPressed: project.isConvertingAll || isAnyFileConverting
+                          ? null
+                          : () async {
+                              await ref.read(projectNotifierProvider.notifier).syncProjectFiles(project.id);
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Cartella sincronizzata con successo')),
+                                );
+                              }
+                            },
+                      style: IconButton.styleFrom(
+                        padding: const EdgeInsets.all(12),
+                        backgroundColor: Colors.blueAccent.withValues(alpha: 0.1),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: BorderSide(color: Colors.blueAccent.withValues(alpha: 0.3)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
                   FilledButton.icon(
                     onPressed: buttonAction,
                     icon: Icon(buttonIcon, size: 18),
@@ -456,13 +493,33 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Text(
-                      '${(progress * 100).toInt()}% ($completedCount/$totalCount)',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '${(progress * 100).toInt()}% ($completedCount/$totalCount)',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (project.globalStartTime != null) ...[
+                          const SizedBox(height: 4),
+                          ElapsedTimerWidget(
+                            startTime: project.globalStartTime,
+                            endTime: project.globalEndTime,
+                            prefix: project.isConvertingAll ? 'Rimangono: ' : 'Tempo totale: ',
+                            currentProgress: currentProjectPage,
+                            totalProgress: totalProjectPages,
+                            style: const TextStyle(
+                              color: Colors.blueAccent,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),
@@ -560,6 +617,15 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                                             : '${(file.progress * 100).toInt()}%',
                                         style: const TextStyle(color: Colors.white70, fontSize: 11),
                                       ),
+                                      const SizedBox(width: 8),
+                                      ElapsedTimerWidget(
+                                        startTime: file.startTime,
+                                        endTime: file.endTime,
+                                        prefix: '• Rimangono: ',
+                                        currentProgress: file.currentPage,
+                                        totalProgress: file.pagesCount,
+                                        style: const TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                                      ),
                                     ],
                                   ),
                                 ] else if (file.error != null) ...[
@@ -569,6 +635,15 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                                     style: const TextStyle(color: Colors.redAccent, fontSize: 11),
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                                if (file.status != 'converting' && file.startTime != null) ...[
+                                  const SizedBox(height: 4),
+                                  ElapsedTimerWidget(
+                                    startTime: file.startTime,
+                                    endTime: file.endTime,
+                                    prefix: 'Tempo: ',
+                                    style: const TextStyle(color: Colors.white38, fontSize: 11),
                                   ),
                                 ],
                               ],
@@ -707,6 +782,15 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                                         : '${(file.progress * 100).toInt()}%',
                                     style: const TextStyle(color: Colors.white70, fontSize: 11),
                                   ),
+                                  const SizedBox(width: 8),
+                                  ElapsedTimerWidget(
+                                    startTime: file.startTime,
+                                    endTime: file.endTime,
+                                    prefix: '• Rimangono: ',
+                                    currentProgress: file.currentPage,
+                                    totalProgress: file.pagesCount,
+                                    style: const TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                                  ),
                                 ],
                               ),
                             ] else if (file.error != null) ...[
@@ -716,6 +800,15 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                                 style: const TextStyle(color: Colors.redAccent, fontSize: 11),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                            if (file.status != 'converting' && file.startTime != null) ...[
+                              const SizedBox(height: 4),
+                              ElapsedTimerWidget(
+                                startTime: file.startTime,
+                                endTime: file.endTime,
+                                prefix: 'Tempo conversione: ',
+                                style: const TextStyle(color: Colors.white38, fontSize: 11),
                               ),
                             ],
                           ],
@@ -1639,6 +1732,125 @@ class _PdfThumbnailWidgetState extends State<PdfThumbnailWidget> {
       ),
       child: child,
     );
+  }
+}
+
+class ElapsedTimerWidget extends StatefulWidget {
+  final DateTime? startTime;
+  final DateTime? endTime;
+  final TextStyle? style;
+  final String prefix;
+  final int currentProgress;
+  final int totalProgress;
+  final bool showCountdown;
+
+  const ElapsedTimerWidget({
+    super.key,
+    required this.startTime,
+    required this.endTime,
+    this.style,
+    this.prefix = '',
+    this.currentProgress = 0,
+    this.totalProgress = 0,
+    this.showCountdown = true,
+  });
+
+  @override
+  State<ElapsedTimerWidget> createState() => _ElapsedTimerWidgetState();
+}
+
+class _ElapsedTimerWidgetState extends State<ElapsedTimerWidget> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _startTimerIfNeeded();
+  }
+
+  @override
+  void didUpdateWidget(ElapsedTimerWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _startTimerIfNeeded();
+  }
+
+  void _startTimerIfNeeded() {
+    _timer?.cancel();
+    _timer = null;
+
+    if (widget.startTime != null && widget.endTime == null) {
+      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (mounted) {
+          setState(() {});
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  String _formatDuration(Duration duration) {
+    final minutes = duration.inMinutes;
+    final seconds = duration.inSeconds % 60;
+    if (minutes > 0) {
+      return '${minutes}m ${seconds}s';
+    } else {
+      return '${seconds}s';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.startTime == null) {
+      return const SizedBox.shrink();
+    }
+
+    final isRunning = widget.endTime == null;
+
+    if (isRunning && widget.showCountdown) {
+      final now = DateTime.now();
+      final elapsed = now.difference(widget.startTime!);
+      
+      Duration estimatedTotal;
+      final current = widget.currentProgress;
+      final total = widget.totalProgress > 0 ? widget.totalProgress : 1;
+
+      if (current <= 0) {
+        estimatedTotal = Duration(seconds: total * 12);
+      } else {
+        final msPerUnit = elapsed.inMilliseconds / current;
+        estimatedTotal = Duration(milliseconds: (total * msPerUnit).round());
+      }
+
+      final estimatedEndTime = widget.startTime!.add(estimatedTotal);
+      var remaining = estimatedEndTime.difference(now);
+      if (remaining.isNegative) {
+        remaining = Duration.zero;
+      }
+
+      String remainingText;
+      if (remaining == Duration.zero) {
+        remainingText = 'Pochi secondi...';
+      } else {
+        remainingText = _formatDuration(remaining);
+      }
+
+      return Text(
+        '${widget.prefix}$remainingText',
+        style: widget.style,
+      );
+    } else {
+      final end = widget.endTime ?? DateTime.now();
+      final elapsed = end.difference(widget.startTime!);
+      return Text(
+        '${widget.prefix}${_formatDuration(elapsed)}',
+        style: widget.style,
+      );
+    }
   }
 }
 
