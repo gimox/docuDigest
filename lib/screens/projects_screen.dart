@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +9,7 @@ import 'package:pdfx/pdfx.dart';
 import '../state/project_state.dart';
 import '../state/ocr_state.dart';
 import '../services/project_directory_helper.dart' as dir_helper;
+import '../services/update_service.dart';
 import 'widgets/server_connection_indicator.dart';
 
 
@@ -19,6 +21,24 @@ class ProjectsScreen extends ConsumerStatefulWidget {
 }
 
 class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
+  Timer? _updateTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _updateTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        checkForUpdate(context, showNoUpdateDialog: false);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _updateTimer?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final projectState = ref.watch(projectNotifierProvider);
@@ -85,6 +105,14 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                 icon: const Icon(Icons.psychology, color: Colors.white54, size: 20),
                 tooltip: 'Gestione Prompt',
                 onPressed: _showPromptDialog,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 10),
+              IconButton(
+                icon: const Icon(Icons.system_update_alt, color: Colors.white54, size: 20),
+                tooltip: 'Verifica Aggiornamenti',
+                onPressed: () => checkForUpdate(context, showNoUpdateDialog: true),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
               ),
