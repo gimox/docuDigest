@@ -492,6 +492,24 @@ class ProjectNotifier extends _$ProjectNotifier {
     _saveProjects();
   }
 
+  Future<void> updateProjectDetails(String projectId, String name, String sourceDir, String destDir) async {
+    final updatedProjects = state.projects.map((p) {
+      if (p.id != projectId) return p;
+      return p.copyWith(
+        name: name,
+        sourceDir: sourceDir,
+        destDir: destDir,
+      );
+    }).toList();
+
+    state = state.copyWith(projects: updatedProjects);
+    await _saveProjects();
+
+    if (!kIsWeb) {
+      await syncProjectFiles(projectId);
+    }
+  }
+
   void updateFilePrompt(String projectId, String filePath, String promptType, String customPrompt) {
     final projects = state.projects.map((p) {
       if (p.id != projectId) return p;

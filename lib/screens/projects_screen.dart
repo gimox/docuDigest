@@ -398,14 +398,36 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          project.name,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          overflow: TextOverflow.ellipsis,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                project.name,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.edit, color: Colors.blueAccent, size: 20),
+                              tooltip: 'Modifica dati progetto',
+                              onPressed: () {
+                                showDialog(
+                                  context: context,
+                                  barrierDismissible: false,
+                                  builder: (context) {
+                                    return EditProjectDialog(project: project);
+                                  },
+                                );
+                              },
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 6),
                         Row(
@@ -1850,6 +1872,231 @@ class _ElapsedTimerWidgetState extends State<ElapsedTimerWidget> {
         '${widget.prefix}${_formatDuration(elapsed)}',
         style: widget.style,
       );
+    }
+  }
+}
+
+class EditProjectDialog extends StatefulWidget {
+  final Project project;
+  const EditProjectDialog({super.key, required this.project});
+
+  @override
+  State<EditProjectDialog> createState() => _EditProjectDialogState();
+}
+
+class _EditProjectDialogState extends State<EditProjectDialog> {
+  late final TextEditingController _nameController;
+  late String _sourceDir;
+  late String _destDir;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.project.name);
+    _sourceDir = widget.project.sourceDir;
+    _destDir = widget.project.destDir;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: const Color(0xFF1E293B),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        width: 500,
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Modifica Progetto',
+              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: _nameController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Nome Progetto',
+                labelStyle: TextStyle(color: Colors.white54),
+                border: OutlineInputBorder(),
+                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF475569))),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Source folder / Files
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Cartella Sorgente (PDF)',
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        kIsWeb
+                            ? 'Web Upload (Non modificabile)'
+                            : (_sourceDir.isNotEmpty ? _sourceDir : 'Non selezionata'),
+                        style: const TextStyle(color: Colors.white38, fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                if (!kIsWeb)
+                  ElevatedButton(
+                    onPressed: _pickSource,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF334155),
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Scegli'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Dest folder
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Cartella Destinazione (Markdown)',
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        kIsWeb
+                            ? 'Salvataggio automatico tramite Download browser'
+                            : (_destDir.isNotEmpty ? _destDir : 'Non selezionata'),
+                        style: const TextStyle(color: Colors.white38, fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                if (!kIsWeb)
+                  ElevatedButton(
+                    onPressed: _pickDest,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF334155),
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Scegli'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: _loading ? null : () => Navigator.of(context).pop(),
+                  child: const Text('Annulla', style: TextStyle(color: Colors.white54)),
+                ),
+                const SizedBox(width: 12),
+                Consumer(
+                  builder: (context, ref, child) {
+                    return ElevatedButton(
+                      onPressed: _loading ? null : () => _saveProject(ref),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueAccent,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: _loading
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Text('Salva'),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickSource() async {
+    final path = await dir_helper.pickDirectory();
+    if (path != null) {
+      setState(() {
+        _sourceDir = path;
+      });
+    }
+  }
+
+  Future<void> _pickDest() async {
+    final path = await dir_helper.pickDirectory();
+    if (path != null) {
+      setState(() {
+        _destDir = path;
+      });
+    }
+  }
+
+  Future<void> _saveProject(WidgetRef ref) async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Inserisci il nome del progetto.')),
+      );
+      return;
+    }
+
+    if (!kIsWeb) {
+      if (_sourceDir.isEmpty || _destDir.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Seleziona le cartelle sorgente e destinazione.')),
+        );
+        return;
+      }
+    }
+
+    setState(() {
+      _loading = true;
+    });
+
+    try {
+      await ref.read(projectNotifierProvider.notifier).updateProjectDetails(
+            widget.project.id,
+            name,
+            _sourceDir,
+            _destDir,
+          );
+
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Errore durante il salvataggio del progetto: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
     }
   }
 }

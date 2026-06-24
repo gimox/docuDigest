@@ -288,7 +288,41 @@ Future<void> checkForUpdate(BuildContext context, {bool showNoUpdateDialog = fal
 
           if (success == true) {
             if (Platform.isMacOS) {
-              await Process.run('open', [savePath]);
+              if (context.mounted) {
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (context) => const AlertDialog(
+                    backgroundColor: Color(0xFF1E293B),
+                    title: Text('Installazione in corso', style: TextStyle(color: Colors.white)),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(color: Colors.tealAccent),
+                        SizedBox(height: 16),
+                        Text(
+                          'Installazione dell\'aggiornamento e riavvio dell\'applicazione...',
+                          style: TextStyle(color: Colors.white70),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+              final didAutoUpdate = await _autoUpdateMacDmg(savePath);
+              if (!didAutoUpdate) {
+                if (context.mounted) {
+                  Navigator.of(context).pop(); // Close the loading dialog
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Installazione automatica fallita. Apertura del file per l\'installazione manuale...'),
+                      backgroundColor: Colors.orangeAccent,
+                    ),
+                  );
+                }
+                await Process.run('open', [savePath]);
+              }
             } else if (Platform.isWindows) {
               await Process.start(savePath, [], runInShell: true);
               if (context.mounted) {
@@ -360,4 +394,98 @@ Future<void> checkForUpdate(BuildContext context, {bool showNoUpdateDialog = fal
       );
     }
   }
+}
+
+Future<bool> _autoUpdateMacDmg(String dmgPath) async {
+  final runningAppPath = _getRunningAppBundlePath();
+  if (runningAppPath == null) {
+    debugPrint('Not running from a .app bundle, skipping auto-update.');
+    return false;
+  }
+
+  String? mountPoint;
+  try {
+    // 1. Mount the DMG
+    final mountResult = await Process.run('hdiutil', ['attach', '-nobrowse', dmgPath]);
+    if (mountResult.exitCode != 0) {
+      throw Exception('Failed to mount DMG: ${mountResult.stderr}');
+    }
+
+    // 2. Parse the mount point from the output
+    final lines = mountResult.stdout.toString().split('\n');
+    for (final line in lines) {
+      final index = line.indexOf('/Volumes/');
+      if (index != -1) {
+        mountPoint = line.substring(index).trim();
+        break;
+      }
+    }
+
+    if (mountPoint == null) {
+      throw Exception('Could not find mount point in DMG output.');
+    }
+
+    // 3. Find the .app bundle inside the mounted volume
+    final volumeDir = Directory(mountPoint);
+    final entities = volumeDir.listSync();
+    String? newAppPath;
+    for (final entity in entities) {
+      if (entity is Directory && entity.path.endsWith('.app')) {
+        newAppPath = entity.path;
+        break;
+      }
+    }
+
+    if (newAppPath == null) {
+      throw Exception('No .app bundle found inside the DMG.');
+    }
+
+    // 4. Overwrite the currently running app bundle with the new one
+    final backupAppPath = '$runningAppPath.bak';
+    // Remove old backup if exists
+    final backupDir = Directory(backupAppPath);
+    if (backupDir.existsSync()) {
+      backupDir.deleteSync(recursive: true);
+    }
+    
+    // Rename current running app to backup
+    await Process.run('mv', [runningAppPath, backupAppPath]);
+    
+    // Copy new app to the original path (ditto preserves signatures & forks)
+    final copyResult = await Process.run('ditto', [newAppPath, runningAppPath]);
+    if (copyResult.exitCode != 0) {
+      // Rollback if copy failed
+      await Process.run('mv', [backupAppPath, runningAppPath]);
+      throw Exception('Failed to copy new app: ${copyResult.stderr}');
+    }
+    
+    // Delete backup directory in the background
+    Process.run('rm', ['-rf', backupAppPath]);
+
+    // 5. Unmount the DMG
+    await Process.run('hdiutil', ['detach', mountPoint]);
+    mountPoint = null;
+
+    // 6. Relaunch the application and exit
+    await Process.start('open', [runningAppPath]);
+    exit(0);
+  } catch (e) {
+    debugPrint('Auto-update error: $e');
+    // Clean up mount point if needed
+    if (mountPoint != null) {
+      try {
+        await Process.run('hdiutil', ['detach', mountPoint]);
+      } catch (_) {}
+    }
+    return false;
+  }
+}
+
+String? _getRunningAppBundlePath() {
+  final execPath = Platform.resolvedExecutable;
+  final index = execPath.indexOf('.app/Contents/MacOS/');
+  if (index != -1) {
+    return execPath.substring(0, index + 4);
+  }
+  return null;
 }
