@@ -628,7 +628,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                                       ),
                                     ],
                                   ),
-                                ] else if (file.error != null) ...[
+                                ] else if (file.status == 'error' && file.error != null) ...[
                                   const SizedBox(height: 4),
                                   Text(
                                     file.error!,
@@ -793,7 +793,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                                   ),
                                 ],
                               ),
-                            ] else if (file.error != null) ...[
+                            ] else if (file.status == 'error' && file.error != null) ...[
                               const SizedBox(height: 4),
                               Text(
                                 file.error!,

@@ -26,6 +26,9 @@ class ProjectPreviewScreen extends ConsumerStatefulWidget {
 
 class _ProjectPreviewScreenState extends ConsumerState<ProjectPreviewScreen> {
   PdfController? _pdfController;
+  PdfDocument? _pdfDocument;
+  final Map<int, Uint8List> _pageImages = {};
+  bool _showThumbnails = true;
   late TextEditingController _markdownController;
   late FocusNode _focusNode;
   late md_src.Toolbar _toolbar;
@@ -79,6 +82,7 @@ class _ProjectPreviewScreenState extends ConsumerState<ProjectPreviewScreen> {
       }
 
       final doc = await PdfDocument.openData(bytes);
+      _pdfDocument = doc;
       _totalPages = doc.pagesCount;
 
       _pdfController = PdfController(
@@ -93,6 +97,30 @@ class _ProjectPreviewScreenState extends ConsumerState<ProjectPreviewScreen> {
         _loading = false;
         _error = e.toString();
       });
+    }
+  }
+
+  Future<void> _loadPageImage(int pageNumber) async {
+    if (_pdfDocument == null) return;
+    if (_pageImages.containsKey(pageNumber)) return;
+
+    try {
+      final page = await _pdfDocument!.getPage(pageNumber);
+      final pageImage = await page.render(
+        width: page.width * 1.5,
+        height: page.height * 1.5,
+        format: PdfPageImageFormat.png,
+        backgroundColor: '#ffffff',
+      );
+      await page.close();
+
+      if (pageImage != null && mounted) {
+        setState(() {
+          _pageImages[pageNumber] = pageImage.bytes;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading preview page image $pageNumber: $e');
     }
   }
 
@@ -275,9 +303,24 @@ class _ProjectPreviewScreenState extends ConsumerState<ProjectPreviewScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Documento Originale (PDF)',
-                        style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              _showThumbnails ? Icons.view_sidebar : Icons.view_sidebar_outlined,
+                              color: _showThumbnails ? Colors.blueAccent : Colors.white70,
+                              size: 20,
+                            ),
+                            tooltip: _showThumbnails ? 'Nascondi Miniature' : 'Mostra Miniature',
+                            onPressed: () => setState(() => _showThumbnails = !_showThumbnails),
+                          ),
+                          const SizedBox(width: 4),
+                          const Text(
+                            'Documento Originale (PDF)',
+                            style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
+                          ),
+                        ],
                       ),
                       if (_pdfController != null)
                         Row(
@@ -309,19 +352,117 @@ class _ProjectPreviewScreenState extends ConsumerState<ProjectPreviewScreen> {
                     ],
                   ),
                 ),
-                // PDF View
+                // PDF View and Thumbnail Sidebar
                 Expanded(
                   child: _pdfController != null
-                      ? ClipRRect(
-                          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
-                          child: PdfView(
-                            controller: _pdfController!,
-                            onPageChanged: (page) {
-                              setState(() {
-                                _currentPage = page;
-                              });
-                            },
-                          ),
+                      ? Row(
+                          children: [
+                            // Thumbnail Sidebar
+                            if (_showThumbnails)
+                              Container(
+                                width: 140,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF151F32),
+                                  border: Border(right: BorderSide(color: Color(0xFF334155), width: 1)),
+                                  borderRadius: BorderRadius.only(
+                                    bottomLeft: Radius.circular(16),
+                                  ),
+                                ),
+                                child: ListView.builder(
+                                  itemCount: _totalPages,
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  itemBuilder: (context, index) {
+                                    final pageNum = index + 1;
+                                    final isSelected = pageNum == _currentPage;
+                                    final imageBytes = _pageImages[pageNum];
+
+                                    if (imageBytes == null) {
+                                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                                        _loadPageImage(pageNum);
+                                      });
+                                    }
+
+                                    return GestureDetector(
+                                      onTap: () {
+                                        _pdfController!.jumpToPage(pageNum);
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
+                                        child: Column(
+                                          children: [
+                                            Container(
+                                              height: 120,
+                                              width: 100,
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                borderRadius: BorderRadius.circular(6),
+                                                border: Border.all(
+                                                  color: isSelected ? Colors.blueAccent : const Color(0xFF334155),
+                                                  width: isSelected ? 2.5 : 1.0,
+                                                ),
+                                                boxShadow: isSelected
+                                                    ? [
+                                                        BoxShadow(
+                                                          color: Colors.blueAccent.withValues(alpha: 0.4),
+                                                          blurRadius: 6,
+                                                          spreadRadius: 1,
+                                                        )
+                                                      ]
+                                                    : null,
+                                              ),
+                                              child: ClipRRect(
+                                                borderRadius: BorderRadius.circular(4),
+                                                child: imageBytes != null
+                                                    ? Image.memory(
+                                                        imageBytes,
+                                                        fit: BoxFit.cover,
+                                                      )
+                                                    : const Center(
+                                                        child: SizedBox(
+                                                          width: 16,
+                                                          height: 16,
+                                                          child: CircularProgressIndicator(
+                                                            strokeWidth: 2,
+                                                            color: Colors.blueAccent,
+                                                          ),
+                                                        ),
+                                                      ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'Pagina $pageNum',
+                                              style: TextStyle(
+                                                color: isSelected ? Colors.blueAccent : Colors.white60,
+                                                fontSize: 10,
+                                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            // Actual PDF View
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.only(
+                                  bottomLeft: _showThumbnails ? Radius.zero : const Radius.circular(16),
+                                  bottomRight: const Radius.circular(16),
+                                ),
+                                child: PdfView(
+                                  controller: _pdfController!,
+                                  onPageChanged: (page) {
+                                    setState(() {
+                                      _currentPage = page;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
                         )
                       : const Center(child: Text('Impossibile caricare il PDF', style: TextStyle(color: Colors.white38))),
                 ),

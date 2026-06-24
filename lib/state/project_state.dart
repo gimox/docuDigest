@@ -91,7 +91,7 @@ class ProjectFile {
     int? pagesCount,
     String? promptType,
     String? customPrompt,
-    String? error,
+    String? Function()? error,
     String? resultMarkdown,
     DateTime? Function()? startTime,
     DateTime? Function()? endTime,
@@ -106,7 +106,7 @@ class ProjectFile {
       pagesCount: pagesCount ?? this.pagesCount,
       promptType: promptType ?? this.promptType,
       customPrompt: customPrompt ?? this.customPrompt,
-      error: error ?? this.error,
+      error: error != null ? error() : this.error,
       resultMarkdown: resultMarkdown ?? this.resultMarkdown,
       startTime: startTime != null ? startTime() : this.startTime,
       endTime: endTime != null ? endTime() : this.endTime,
@@ -265,6 +265,7 @@ class ProjectNotifier extends _$ProjectNotifier {
                         status: 'completed',
                         progress: 1.0,
                         resultMarkdown: existingMarkdown,
+                        error: () => null,
                       ));
                     } else {
                       updatedFiles.add(diskFile);
@@ -375,6 +376,7 @@ class ProjectNotifier extends _$ProjectNotifier {
             status: 'completed',
             progress: 1.0,
             resultMarkdown: existingMarkdown,
+            error: () => null,
           ));
         } else {
           updatedFiles.add(file);
@@ -406,7 +408,7 @@ class ProjectNotifier extends _$ProjectNotifier {
       projectId, 
       filePath, 
       status: 'cancelled', 
-      error: null,
+      error: () => null,
       endTime: () => DateTime.now(),
     );
   }
@@ -427,7 +429,7 @@ class ProjectNotifier extends _$ProjectNotifier {
             projectId, 
             file.path, 
             status: 'cancelled', 
-            error: null,
+            error: () => null,
             endTime: () => DateTime.now(),
           );
         }
@@ -532,7 +534,7 @@ class ProjectNotifier extends _$ProjectNotifier {
       progress: 0.0,
       currentPage: 0,
       pagesCount: 0,
-      error: null,
+      error: () => null,
       startTime: () => DateTime.now(),
       endTime: () => null,
     );
@@ -630,7 +632,7 @@ class ProjectNotifier extends _$ProjectNotifier {
           projectId,
           filePath,
           status: 'cancelled',
-          error: null,
+          error: () => null,
           resultMarkdown: partialMarkdown.isNotEmpty ? partialMarkdown : null,
           endTime: () => DateTime.now(),
         );
@@ -639,7 +641,7 @@ class ProjectNotifier extends _$ProjectNotifier {
           projectId, 
           filePath, 
           status: 'error', 
-          error: e.toString(),
+          error: () => e.toString(),
           endTime: () => DateTime.now(),
         );
       }
@@ -693,7 +695,7 @@ class ProjectNotifier extends _$ProjectNotifier {
       progress: 0.0,
       currentPage: 0,
       pagesCount: 0,
-      error: null,
+      error: () => null,
       startTime: () => null,
       endTime: () => null,
     );
@@ -706,7 +708,7 @@ class ProjectNotifier extends _$ProjectNotifier {
     double? progress,
     int? currentPage,
     int? pagesCount,
-    String? error,
+    String? Function()? error,
     String? resultMarkdown,
     DateTime? Function()? startTime,
     DateTime? Function()? endTime,
@@ -720,7 +722,7 @@ class ProjectNotifier extends _$ProjectNotifier {
           progress: progress ?? f.progress,
           currentPage: currentPage ?? f.currentPage,
           pagesCount: pagesCount ?? f.pagesCount,
-          error: error ?? f.error,
+          error: error,
           resultMarkdown: resultMarkdown ?? f.resultMarkdown,
           startTime: startTime,
           endTime: endTime,
